@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login Page</title>
+    <style>
+        body {
+            background: #f5f7fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .login-box {
+            background: white;
+            padding: 40px 50px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-box h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: 600;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .footer {
+            margin-top: 25px;
+            text-align: center;
+            font-size: 13px;
+            color: #888;
+        }
+
+        .center-link {
+            display: flex;
+            justify-content: center;
+        }
+        .auth-links {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .auth-links a {
+            display: inline-block;
+            padding: 8px 20px;
+            background-color: #c6ccd5;
+            color: #000000;
+            border-radius: 6px;
+            font-size: 14px;
+            text-decoration: none;
+            transition: background 0.3s ease;
+            }
+
+            .auth-links a:hover {
+                background-color: #ababab;
+                }
+
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h1>Login</h1>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <label for="email">User Email</label>
+            <input type="email" id="email" name="user_email" required />
+
+            <label for="password">User Password</label>
+            <input type="password" id="password" name="password" required />
+
+            <button type="submit">Login</button>
+        </form>
+
+        <div class="auth-links">
+            
+             <a href="/signup/">Create Account</a>
+             <a href="/forgot-password/">Forgot Password?</a>
+        </div>
+        <div>
+            {% for message in messages %}
+              {% if message.tags == "success" %}
+               <div style="color: green;" class="success">{{ message }}</div>
+             {% endif %}
+             {% endfor %}
+           
+        </div>
+
+
+        <div class="footer">
+            &copy; 2025 Casualio
+        </div>
+    </div>
+</body>
+</html>
