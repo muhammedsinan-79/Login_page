@@ -10,13 +10,31 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 import pymysql
-pymysql.install_as_MySQLdb()
-import os  
 from dotenv import load_dotenv
-load_dotenv()
 
+# Load .env
+load_dotenv()
+pymysql.install_as_MySQLdb()
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-secret-key")
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost").split(",")
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.getenv("DB_NAME"),         # ex: railway
+        'USER': os.getenv("DB_USER"),         # ex: root or MYSQLUSER
+        'PASSWORD': os.getenv("DB_PASSWORD"), # password
+        'HOST': os.getenv("DB_HOST"),         # ex: containers-us-west-xxx.railway.app
+        'PORT': os.getenv("DB_PORT", "3306"), # check actual port in Railway
+    }
+}
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -91,22 +109,6 @@ WSGI_APPLICATION = 'login_page.wsgi.application'
         'PORT': '3306',
     }
 }'''
-
-DEBUG = os.getenv("DEBUG", "false").lower() == "true"
-SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-secret-key")
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost").split(",")
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.getenv("DB_NAME"),
-        'USER': os.getenv("DB_USER"),
-        'PASSWORD': os.getenv("DB_PASSWORD"),
-        'HOST': os.getenv("DB_HOST"),
-        'PORT': os.getenv("DB_PORT", "3306"),
-
-    }
-}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
