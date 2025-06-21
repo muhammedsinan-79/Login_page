@@ -33,7 +33,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'unsafe-secret-key')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['.railway.app', 'web-production-c7147.up.railway.app', '127.0.0.1', 'localhost']
 
 
 # Application definition
@@ -95,10 +95,16 @@ WSGI_APPLICATION = 'login_page.wsgi.application'
     }
 }'''
 
-DATABASES = {
+'''DATABASES = {
     'default': dj_database_url.config(conn_max_age=600)
-}
+}'''
 
+DATABASE_URL = os.getenv('DATABASE_URL')
+print("Database URL in settings:", DATABASE_URL)
+
+DATABASES = {
+    'default': dj_database_url.config(default=DATABASE_URL, conn_max_age=600)
+}
 
 
 
