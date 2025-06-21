@@ -16,6 +16,7 @@ import os
 import dj_database_url
 import pymysql
 pymysql.install_as_MySQLdb()
+print("Database URL in settings:", os.getenv('DATABASE_URL'))
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -32,7 +33,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'unsafe-secret-key')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['.railway.app', '127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
