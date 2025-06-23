@@ -22,7 +22,7 @@ from .models import RateLimitLog
 
 class HomePage(APIView):
     def get(self, request):
-        return Response(request,'home.html')
+        return render(request,'home.html')
         
 class SignupPage(APIView):
     def get(self,request):
