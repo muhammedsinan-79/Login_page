@@ -67,7 +67,7 @@
 
                 function logout() {
                     const token = localStorage.getItem('authToken'); // or sessionStorage
-                    fetch('http://127.0.0.1:8000/logout/', {
+                    fetch('/logout/', {
                         method: 'POST',
                         headers: {
                             'Authorization': 'Token ' + token,
