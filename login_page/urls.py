@@ -20,7 +20,7 @@ from loginapp import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', views.LoginPage.as_view()),  # 👈 this line is missing!
+    path('', views.HomePage.as_view(), name='home'),  # <-- ADD THIS
     path('login/',views.LoginPage.as_view()), #using a class-based view (APIView), so you need to call .as_view()
     path('signup/',views.SignupPage.as_view()),
     path('logout/', views.LogoutView.as_view()),
