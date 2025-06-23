@@ -19,8 +19,8 @@ from django.urls import path
 from loginapp import views
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
     path('', views.HomePage.as_view(), name='home'),  # <-- ADD THIS
+    path('admin/', admin.site.urls),
     path('login/',views.LoginPage.as_view()), #using a class-based view (APIView), so you need to call .as_view()
     path('signup/',views.SignupPage.as_view()),
     path('logout/', views.LogoutView.as_view()),
