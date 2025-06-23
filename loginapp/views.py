@@ -14,27 +14,19 @@ from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_decode
 from django.contrib import messages
 from django.core.cache import cache
-from django.utils import timezone
 from .models import RateLimitLog
-
-
-
-
 
 
 
 # Create your views here.
 
-from django.views.generic import TemplateView
-
-class HomePage(TemplateView):
-    template_name = 'home.html'
-
+class HomePage(APIView):
+    def get(self, request):
+        return Response({"message": "✅ Django API is deployed successfully!"})
         
 class SignupPage(APIView):
     def get(self,request):
         return render(request,'signup.html')
-    
     
     def post(self,request):
 
