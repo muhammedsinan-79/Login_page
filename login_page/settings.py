@@ -27,6 +27,21 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+REST_FRAMEWORK = {
+    # 'EXCEPTION_HANDLER': 'loginapp.throttle.custom_throttle_handler',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',
+        'user': '1000/hour',
+        'email': '1/min',  # General email throttling
+        'forgot_password_email': '3/min',  # Specific for forgot password
+        # 'ip_limit':'4/min',
+    }
+}
+
 
 # Application definition
 
@@ -128,17 +143,21 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'muhammedsinaan78@gmail.com'
-EMAIL_HOST_PASSWORD = 'cswb ypjl zjvp zyoo'  # Not your regular password!
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+
+#EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+#EMAIL_HOST = 'smtp.gmail.com'
+#EMAIL_PORT = 587
+##EMAIL_USE_TLS = True
+#EMAIL_HOST_USER = 'muhammedsinaan78@gmail.com'
+#EMAIL_HOST_PASSWORD = ''  # Not your regular password!
 
 
 
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',  # Unique identifier
     }
 }

@@ -14,35 +14,31 @@ from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_decode
 from django.contrib import messages
 from django.core.cache import cache
-from django.utils import timezone
 from .models import RateLimitLog
-
-
-
-
+from .throttle import EmailRateThrottle, ForgotPasswordEmailThrottle
+from rest_framework.throttling import AnonRateThrottle
 
 
 
 # Create your views here.
         
 class SignupPage(APIView):
+
+    throttle_classes = [AnonRateThrottle, EmailRateThrottle]
+
     def get(self,request):
         return render(request,'signup.html')
-    
-    
+
     def post(self,request):
 
         print("incoming data:" , request.data)
-
         email = request.data.get('email')
         password = request.data.get('password')
         name = request.data.get('full_name')
         confirm_password = request.data.get('confirm_password')
 
-
         if password != confirm_password:
-            return Response({'error': 'Passwords do not match'}, status=400)
-        
+            return Response({'error': 'Passwords do not match'}, status=400) 
 
         if User.objects.filter(username=email).exists():
             return Response({'error':'User already exists'},status =400)
@@ -60,6 +56,9 @@ class SignupPage(APIView):
         #return render(request, 'login_success.html', {'email': email})
      
 class LoginPage(APIView):
+
+    throttle_classes = [AnonRateThrottle, EmailRateThrottle]
+    
     def get(self,request): 
         return render(request , 'login.html')
     
@@ -98,47 +97,17 @@ class LogoutView(APIView):
 
 
 class ForgotPasswordView(APIView):
-    def get(self,request):
 
+    throttle_classes = [ForgotPasswordEmailThrottle]
+
+    def get(self,request):
         return render(request, 'forgot_password.html')
     
     def post(self,request):
-
         email = request.data.get('email')
         ip = request.META.get('REMOTE_ADDR')
         user_agent = request.META.get('HTTP_USER_AGENT')
-
-        #rate limting 
-
-        cache_key = f"password_reset_rate_limit:{email}"
-        ip_key = f"ip_rate_limit:{ip}"
-
-
-        email_ttl = 60
-        ip_ttl  = 600
-        ip_limit_count = 5
-
-        if cache.get(cache_key):
-            RateLimitLog.objects.create(email=email,ip_address=ip,user_agent=user_agent)
-
-            try:
-                ttl = cache.ttl(cache_key)
-            except (AttributeError,NotImplementedError):
-                ttl = email_ttl     # fallback default(ttl redis)
-
-            return render(request , 'forgot_password.html',{
-                'error': f"Too many requests for this email. Try again in {ttl} seconds.",
-                'remaining_time': ttl
-            })
         
-        ip_count = cache.get(ip_key, 0)
-        if ip_count >= ip_limit_count:
-            RateLimitLog.objects.create(email=email,ip_address=ip,user_agent=user_agent)
-            return render (request , 'forgot_password.html',{
-                'error':f"Too many requests from this IP address. Please wait 10 min."
-            })
-        
-
         try:
             user = User.objects.get(email=email)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -152,26 +121,28 @@ class ForgotPasswordView(APIView):
                 recipient_list=[email],
                 fail_silently=False,
             )
+            return Response({"message": "Password reset email sent."})
 
-            #set rate limit key for 60 seconds
-
-            cache.set(cache_key, True, timeout = email_ttl)
-
-            #Increment Ip count
-            
-            if cache.get(ip_key):
-                cache.incr(ip_key)
-            else:
-                cache.set(ip_key,1,timeout=ip_ttl)    
-
-
-            messages.success(request, "Password reset email sent.")
-            return redirect('/login/')
+            # messages.success(request, "Password reset email sent.")
+            # return redirect('/login/')
 
             #return Response({"message": "Password reset email sent."})
         except User.DoesNotExist:
-            return render(request, 'forgot_password.html', {'error': "User not found."})
-           
+             RateLimitLog.objects.create(
+                email=email,
+                ip_address=ip,
+                user_agent=user_agent
+            )
+             return render(request, 'forgot_password.html', {
+                'error': "If this email exists, a reset link has been sent."
+            })
+        
+        except Exception as e:
+            print(f"Error sending email: {e}")
+            return render(request, 'forgot_password.html', {
+                'error': "An error occurred. Please try again later."
+            })
+        
 class ResetPasswordView(APIView):
     def get(self, request, uidb64, token):
         # You can add any validation here if needed
@@ -183,7 +154,7 @@ class ResetPasswordView(APIView):
             user = User.objects.get(pk=uid)
 
             if default_token_generator.check_token(user,token):
-                new_password = request.data.get("password")
+                new_password = request.data.get("password") 
                 user.set_password(new_password)
                 user.save()
 
