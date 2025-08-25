@@ -24,3 +24,12 @@ class RateLimitLog(models.Model):
 
     def __strt__(self):
         return f"{self.email} @ {self.timestamp} from {self.ip_address}"
+    
+class InvalidCredentialsLog(models.Model):
+    email = models.EmailField(max_length=100)
+    ip_address = models.GenericIPAddressField()
+    user_agent = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True) 
+
+    def __strt__(self):
+        return f"{self.email} @ {self.timestamp} from {self.ip_address}"

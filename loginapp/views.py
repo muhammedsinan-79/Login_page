@@ -14,21 +14,23 @@ from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_decode
 from django.contrib import messages
 from django.core.cache import cache
+from .models import RateLimitLog , InvalidCredentialsLog
+from .throttle import EmailRateThrottle, ForgotPasswordEmailThrottle,IpRateLimiting
 from .models import RateLimitLog
-from .throttle import EmailRateThrottle, ForgotPasswordEmailThrottle
 from rest_framework.throttling import AnonRateThrottle
-
+from rest_framework.exceptions import Throttled
 
 
 # Create your views here.
+
+class HomePage(APIView):
+    def get(self, request):
+        return render(request,'home.html')
         
 class SignupPage(APIView):
-
-    throttle_classes = [AnonRateThrottle, EmailRateThrottle]
-
     def get(self,request):
         return render(request,'signup.html')
-
+    
     def post(self,request):
 
         print("incoming data:" , request.data)
@@ -38,10 +40,14 @@ class SignupPage(APIView):
         confirm_password = request.data.get('confirm_password')
 
         if password != confirm_password:
-            return Response({'error': 'Passwords do not match'}, status=400) 
-
+            #return Response({'error': 'Passwords do not match'}, status=400)
+            messages.error(request,"Passwords do not match")
+            return redirect('/signup/')
+        
         if User.objects.filter(username=email).exists():
-            return Response({'error':'User already exists'},status =400)
+            #return Response({'error':'User already exists'},status =400)
+            messages.success(request, "User already exists , Please log in.")
+            return redirect('/login/')
         
         user = User.objects.create_user(
             username=email,
@@ -49,7 +55,6 @@ class SignupPage(APIView):
             password=password,
             first_name=name
         )
-
         Token.objects.create(user=user)
         messages.success(request, "Your account has been created successfully. Please log in.")
         return redirect('/login/')
@@ -57,22 +62,41 @@ class SignupPage(APIView):
      
 class LoginPage(APIView):
 
-    throttle_classes = [AnonRateThrottle, EmailRateThrottle]
+    throttle_classes = [EmailRateThrottle]
+
+    def handle_exception(self, exc,): #this method is for displaying throttled message in template
+        if isinstance(exc, Throttled):
+            wait_time = exc.wait
+            email = self.request.POST.get("email")
+            print(email)
+
+            return render(self.request, 'login.html', {
+                "error": f"many attempt . Try again in {wait_time} seconds."
+            })
+        return super().handle_exception(exc)
     
+
     def get(self,request): 
         return render(request , 'login.html')
     
     def post(self , request):
 
-        email = request.data.get('user_email')
+        email = request.data.get('email')
         password = request.data.get('password')
+        ip = request.META.get('REMOTE_ADDR')
+        user_agent = request.META.get('HTTP_USER_AGENT')
 
         user = authenticate(username=email ,password=password)
         if user:
             token,_=Token.objects.get_or_create(user=user)
             return render(request, 'login_success.html', {'email': email, 'token': token.key})
         else:
-            return Response({'error':'Invalid credentials'},status=400)
+            #return Response({"message":"Invalid credentials"},status=400)
+
+            InvalidCredentialsLog.objects.create(email=email ,ip_address = ip , user_agent=user_agent )
+
+            messages.error(request, "Invalid credentials")
+            return redirect('/login/')
 
 from rest_framework.authtoken.models import Token
 
@@ -95,11 +119,21 @@ class LogoutView(APIView):
             print("Logout failed:", e)
             return Response({"error": "Logout failed."}, status=400)
 
-
 class ForgotPasswordView(APIView):
+    throttle_classes = [ForgotPasswordEmailThrottle,IpRateLimiting]
 
-    throttle_classes = [ForgotPasswordEmailThrottle]
-
+    def handle_exception(self, exc): #this method is for displaying throttled message in template
+        
+        if isinstance(exc, Throttled): 
+            wait_time = exc.wait
+            email = self.request.POST.get('email')
+            cache_key = f"password_reset_rate_limit:{email}"
+            cache.set(cache_key,True,60)
+            return render(self.request, 'forgot_password.html', {
+                "error": f"Too many requests. Try again in {wait_time} seconds."
+            })
+        return super().handle_exception(exc)
+    
     def get(self,request):
         return render(request, 'forgot_password.html')
     
@@ -121,12 +155,11 @@ class ForgotPasswordView(APIView):
                 recipient_list=[email],
                 fail_silently=False,
             )
-            return Response({"message": "Password reset email sent."})
-
-            # messages.success(request, "Password reset email sent.")
-            # return redirect('/login/')
-
             #return Response({"message": "Password reset email sent."})
+
+            messages.success(request, "Password reset email sent.")
+            return redirect('/login/')
+
         except User.DoesNotExist:
              RateLimitLog.objects.create(
                 email=email,
@@ -142,7 +175,7 @@ class ForgotPasswordView(APIView):
             return render(request, 'forgot_password.html', {
                 'error': "An error occurred. Please try again later."
             })
-        
+              
 class ResetPasswordView(APIView):
     def get(self, request, uidb64, token):
         # You can add any validation here if needed
@@ -154,7 +187,7 @@ class ResetPasswordView(APIView):
             user = User.objects.get(pk=uid)
 
             if default_token_generator.check_token(user,token):
-                new_password = request.data.get("password") 
+                new_password = request.data.get("password")
                 user.set_password(new_password)
                 user.save()
 
@@ -177,27 +210,6 @@ class ResetPasswordView(APIView):
             })
         
 
-
-
-
-
-
-
-
-
-
-
-'''        try:
-            user = SignupInfo.objects.get(user_email=email)
-        except SignupInfo.DoesNotExist:
-            return Response({'error': 'Invalid email'}, status=400)
-
-        if check_password(password, user.user_password):
-            # Generate or get existing token
-            token, created = Token.objects.get_or_create(user=user)
-            return render(request,'login_success.html',{'email':email , 'token': token.key})
-        else:
-            return Response({'error': 'Invalid password'}, status=400)'''
 
        
 

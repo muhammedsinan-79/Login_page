@@ -36,9 +36,9 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
         'user': '1000/hour',
-        'email': '1/min',  # General email throttling
-        'forgot_password_email': '3/min',  # Specific for forgot password
-        # 'ip_limit':'4/min',
+        'email': '2/min',  # General email throttling
+        'forgot_password_email': '1/min',  # Specific for forgot password
+        'ip_limit':'15/min',
     }
 }
 

@@ -100,6 +100,18 @@
             <button type="submit">Sign Up</button>
         </form>
 
+        <div>
+            {% for message in messages %}
+              {% if message.tags == "success" %}
+               <div style="color: green;" class="success">{{ message }}</div>
+               {% endif %}
+              {% if message.tags == "error" %}
+              <div style="color: rgb(217, 50, 4);" class="error">{{ message }}</div>
+               {% endif %}
+             {% endfor %}
+           
+        </div>
+
         <a href="http://127.0.0.1:8000/login/" class="login-link">Already have an account? Login</a>
 
         <div class="footer">

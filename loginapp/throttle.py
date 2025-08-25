@@ -18,9 +18,9 @@ class EmailRateThrottle(AnonRateThrottle):
             email = request.POST.get('email')            
         if not email:
             return None
-        return f"throttle_email_{email}"#create unique cache key for this email
+        return f"throttle_{self.scope}_{email}"#create unique cache key for this email , self.scope--> use scope dynamically
     
-    def get_rate(self):#fetech rate limit from setting.py
+    def get_rate(self):  #fetech rate limit from setting.py
 
         if not getattr(self , 'scope' , None):
             return None
@@ -31,17 +31,20 @@ class EmailRateThrottle(AnonRateThrottle):
         
 class ForgotPasswordEmailThrottle(EmailRateThrottle):
 
-    scope = 'forgot_password_email'
+    scope = 'forgot_password_email'   #this line only need if self.scope used (scope is overrided here)
 
-    def get_cache_key(self, request, view):
-        email = None
-        if hasattr(request, 'data') and request.data:
-            email = request.data.get('email')
-            print(email,'throotted')
-        elif request.method == 'POST' and hasattr(request, 'POST'):
-            email = request.POST.get('email')
-        
-        if not email:
+class IpRateLimiting(EmailRateThrottle):
+
+    scope = 'ip_limit'
+
+    def get_cache_key(self, request, view): #override
+        ip = request.META.get('REMOTE_ADDR')
+        print(ip,"throttled")
+        if not ip:
             return None
-        return f"throttle_forgot_password_{email}"
-    
+        return f"throttle_{self.scope}_{ip}"
+
+
+
+
+
