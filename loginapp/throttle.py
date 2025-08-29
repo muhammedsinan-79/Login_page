@@ -1,50 +1,139 @@
-from rest_framework.throttling import AnonRateThrottle
+from rest_framework.throttling import BaseThrottle
 from django.core.cache import cache
-from rest_framework.views import exception_handler
-from rest_framework.response import Response
-from rest_framework import status
+from rest_framework.exceptions import Throttled
+from .models import RateLimitLog
+import time
 
-class EmailRateThrottle(AnonRateThrottle):
-
-    scope = 'email'
+class ProgressiveEmailThrottle(BaseThrottle):
+    scope = "email"
+    cache_format = "throttle_%(scope)s_%(ident)s"
 
     def get_cache_key(self, request, view):
         #generate cache key based on email address from request data
-
         email = None
-        if hasattr(request, 'data') and request.data:
-            email = request.data.get('email')
-        elif request.method == 'POST' and hasattr(request, 'POST'):
-            email = request.POST.get('email')            
+        email = request.data.get("email")
         if not email:
             return None
-        return f"throttle_{self.scope}_{email}"#create unique cache key for this email , self.scope--> use scope dynamically
+        return self.cache_format % {"scope": self.scope, "ident": email}
     
-    def get_rate(self):  #fetech rate limit from setting.py
+    def allow_request(self, request, view):
 
-        if not getattr(self , 'scope' , None):
-            return None
-        try:
-            return self.THROTTLE_RATES[self.scope]
-        except KeyError:
-            return None
+        self.key = self.get_cache_key(request,view)
+        if self.key is None:
+            return True
         
-class ForgotPasswordEmailThrottle(EmailRateThrottle):
+        rest_time = 3600
+        max_attempt = 5
+        base_time = 60
 
-    scope = 'forgot_password_email'   #this line only need if self.scope used (scope is overrided here)
+        throttle_history = cache.get(self.key,{"attempt":0, "next_allowed_time":0,"last_request_time":0})
+        current_time = time.time()
 
-class IpRateLimiting(EmailRateThrottle):
 
-    scope = 'ip_limit'
+        if throttle_history["attempt"] >= max_attempt:
+            wait_time = (rest_time - (current_time - throttle_history["last_request_time"]))
+            print(wait_time)
+            raise Throttled(detail="Too many attempts. Please try again after 1 hour.")
 
-    def get_cache_key(self, request, view): #override
-        ip = request.META.get('REMOTE_ADDR')
-        print(ip,"throttled")
-        if not ip:
+        
+        if throttle_history["next_allowed_time"] > current_time:
+            self.wait_time = throttle_history["next_allowed_time"] -  current_time      
+
+            print(self.wait_time) #remaining time 
+            print(throttle_history["next_allowed_time"]-throttle_history["last_request_time"])  # total wait time
+ 
+            wait_time = int(throttle_history["next_allowed_time"] - current_time)
+
+            minutes, seconds = divmod(wait_time, 60)
+            if minutes > 0:
+                formatted_time = f"{minutes} min {seconds} seconds"
+            else:
+                formatted_time = f"{seconds} seconds"
+            
+            raise Throttled(#wait=wait_time,
+                detail=f"Resend Available after {formatted_time} ")
+
+            # return False #self.throttle_failure()
+        
+        throttle_history["attempt"] +=1 
+        throttle_history["last_request_time"] = current_time
+
+        wait_time = base_time * (2**((throttle_history["attempt"])-1))  # logic  
+        throttle_history["next_allowed_time"] = current_time + wait_time
+
+        cache.set(self.key , throttle_history, timeout= rest_time)
+ 
+        return True  #super().allow_request(request, view)
+    
+    def wait(self):
+        return getattr(self, "wait_time", 60)
+
+class LoginFailedAttemptLimiting(BaseThrottle):
+
+    scope = "email"
+    cache_format = "throttle_%(scope)s_%(ident)s"
+
+    def get_cache_key(self, request, view):
+
+        
+        #generate cache key based on email address from request data
+        email = None
+        email = request.data.get("email")
+        if not email:
             return None
-        return f"throttle_{self.scope}_{ip}"
+        return self.cache_format % {"scope": self.scope, "ident": email}#<--both same --> f"throttle_email_{email}"  
+
+        
+    def allow_request(self, request, view):
+
+        self.key = self.get_cache_key(request,view)
+        if self.key is None:
+            return True
+        
+        #rest_time = None
+        min_attempt = 3
+        # max_attempt = 7
+        # base_time = 30
+
+        throttle_history = cache.get(self.key,{"attempt":0, "next_allowed_time":0,"last_request_time":0})
+        # current_time = time.time()
+
+        if  min_attempt > throttle_history["attempt"] +1:
+            remaining_attempt = min_attempt - throttle_history["attempt"]
+            throttle_history["attempt"] +=1 
+            print("remain " , remaining_attempt)
+            cache.set(self.key , throttle_history, None)
+            return True     
+            
+
+        # if throttle_history["attempt"] >= max_attempt:
+        #     wait_time = (rest_time - (current_time - throttle_history["last_request_time"]))
+        #     print(wait_time)
+        #     raise Throttled(detail="Too many attempts. Please try again after 1 hour.")
 
 
+        # if throttle_history["next_allowed_time"] > current_time:
+        #     self.wait_time = throttle_history["next_allowed_time"] -  current_time
+
+        #     print(self.wait_time) #remaining time 
+        #     print(throttle_history["next_allowed_time"]-throttle_history["last_request_time"])  # total wait time
+
+        #     wait_time = int(throttle_history["next_allowed_time"] - current_time)
+        #     remaining_attempt = max_attempt - throttle_history["attempt"] 
+        #     raise Throttled(wait=wait_time,
+        #         detail=f"remaining attempt is {remaining_attempt},")
+        
+        # throttle_history["attempt"] +=1 
+        # throttle_history["last_request_time"] = current_time
+
+        # wait_time = base_time * (2**((throttle_history["attempt"])-min_attempt-1))  # logic  
+        # throttle_history["next_allowed_time"] = current_time + wait_time
+        # cache.set(self.key , throttle_history, timeout= rest_time)
+
+        return False
+        
+
+        
 
 
-
+      

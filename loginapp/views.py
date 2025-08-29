@@ -14,10 +14,9 @@ from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_decode
 from django.contrib import messages
 from django.core.cache import cache
-from .models import RateLimitLog , InvalidCredentialsLog
-from .throttle import EmailRateThrottle, ForgotPasswordEmailThrottle,IpRateLimiting
-from .models import RateLimitLog
-from rest_framework.throttling import AnonRateThrottle
+
+from .models import RateLimitLog , InvalidCredentialsLog ,LoginCredentialLog
+from .throttle import ProgressiveEmailThrottle,LoginFailedAttemptLimiting #IpRateLimiting
 from rest_framework.exceptions import Throttled
 
 
@@ -62,20 +61,25 @@ class SignupPage(APIView):
      
 class LoginPage(APIView):
 
-    throttle_classes = [EmailRateThrottle]
-
-    def handle_exception(self, exc,): #this method is for displaying throttled message in template
+    def handle_exception(self, exc):
         if isinstance(exc, Throttled):
-            wait_time = exc.wait
             email = self.request.POST.get("email")
-            print(email)
+            ip = self.request.META.get('REMOTE_ADDR')
+            user_agent = self.request.META.get('HTTP_USER_AGENT')
 
-            return render(self.request, 'login.html', {
-                "error": f"many attempt . Try again in {wait_time} seconds."
-            })
+            print(email,ip,user_agent)
+
+            InvalidCredentialsLog.objects.create(
+                email=email,
+                ip_address=ip,
+                user_agent=user_agent,
+                is_throttled=True                
+            )
+            return render(self.request, "login.html", {
+                "error": "Request Throttled , Please Reset Your Password"#exc.detail --> # this will now show your custom string
+            }, status=429)
         return super().handle_exception(exc)
     
-
     def get(self,request): 
         return render(request , 'login.html')
     
@@ -86,16 +90,45 @@ class LoginPage(APIView):
         ip = request.META.get('REMOTE_ADDR')
         user_agent = request.META.get('HTTP_USER_AGENT')
 
+        cache_key2 = f"throttleD_email_{email}"
+
+        if cache.get(cache_key2,0):  #even try with correct password after 3 times fail , get  throttle
+            raise Throttled()   
+
         user = authenticate(username=email ,password=password)
         if user:
             token,_=Token.objects.get_or_create(user=user)
+
+            cache_key1 = f"throttle_email_{email}"
+            cache.delete(cache_key1)  #cache.set in throttle.py
+
+            cache.delete("failed_attempt") #delete remaining count.
+
+            LoginCredentialLog.objects.create(
+                email=email,
+                ip_address = ip,
+                user_agent=user_agent,
+            )
             return render(request, 'login_success.html', {'email': email, 'token': token.key})
         else:
-            #return Response({"message":"Invalid credentials"},status=400)
 
-            InvalidCredentialsLog.objects.create(email=email ,ip_address = ip , user_agent=user_agent )
+            throttle = LoginFailedAttemptLimiting()
+           
+            if not throttle.allow_request(request, self):
+                cache.set(cache_key2, True , None)
+                raise Throttled(wait=throttle.wait())
+            
+            remaining_attempt = cache.get("failed_attempt",3)
+            remaining_attempt -= 1
+            InvalidCredentialsLog.objects.create(
+                email=email,    
+                ip_address = ip,
+                user_agent=user_agent,
+            )  
 
-            messages.error(request, "Invalid credentials")
+            cache.set("failed_attempt",remaining_attempt)
+            messages.error(request, f"Invalid Credentials , {remaining_attempt} Attempt Left") 
+            
             return redirect('/login/')
 
 from rest_framework.authtoken.models import Token
@@ -120,18 +153,24 @@ class LogoutView(APIView):
             return Response({"error": "Logout failed."}, status=400)
 
 class ForgotPasswordView(APIView):
-    throttle_classes = [ForgotPasswordEmailThrottle,IpRateLimiting]
+    throttle_classes = [ProgressiveEmailThrottle]
 
-    def handle_exception(self, exc): #this method is for displaying throttled message in template
-        
-        if isinstance(exc, Throttled): 
-            wait_time = exc.wait
-            email = self.request.POST.get('email')
-            cache_key = f"password_reset_rate_limit:{email}"
-            cache.set(cache_key,True,60)
-            return render(self.request, 'forgot_password.html', {
-                "error": f"Too many requests. Try again in {wait_time} seconds."
-            })
+    def handle_exception(self, exc):
+        if isinstance(exc, Throttled):
+            email = self.request.POST.get("email")
+            ip = self.request.META.get('REMOTE_ADDR')
+            user_agent = self.request.META.get('HTTP_USER_AGENT')
+            print(email,ip,user_agent)
+
+            RateLimitLog.objects.create(
+                email=email,
+                ip_address=ip,
+                user_agent=user_agent,
+                is_throttled=True
+            )
+            return render(self.request, "forgot_password.html", {
+                "error": exc.detail  # this will now show your custom string
+            }, status=429)
         return super().handle_exception(exc)
     
     def get(self,request):
@@ -140,14 +179,29 @@ class ForgotPasswordView(APIView):
     def post(self,request):
         email = request.data.get('email')
         ip = request.META.get('REMOTE_ADDR')
-        user_agent = request.META.get('HTTP_USER_AGENT')
+        user_agent = request.META.get('HTTP_USER_AGENT') 
         
+        Ip_timeout = 600 #10min
+        ip_limit_count = 5
+        ip_key = f"ip_rate_limit:{ip}"
+
+        ip_count = cache.get(ip_key, 0)
+        if ip_count >= ip_limit_count:
+            RateLimitLog.objects.create(
+                email=email,
+                ip_address=ip,
+                user_agent=user_agent,
+                is_throttled= True
+                )
+            return render (request , 'forgot_password.html',{
+                'error':f"Too many requests from this IP address. Please wait 10 min."
+            })
         try:
             user = User.objects.get(email=email)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
             reset_link = f"http://127.0.0.1:8000/reset-password/{uid}/{token}/"
-
+            print(uid)
             send_mail (
                 subject="Reset Your Password",
                 message=f"Click the link to reset your password: {reset_link}",
@@ -155,21 +209,28 @@ class ForgotPasswordView(APIView):
                 recipient_list=[email],
                 fail_silently=False,
             )
-            #return Response({"message": "Password reset email sent."})
-
-            messages.success(request, "Password reset email sent.")
-            return redirect('/login/')
-
-        except User.DoesNotExist:
-             RateLimitLog.objects.create(
+            RateLimitLog.objects.create(
                 email=email,
                 ip_address=ip,
                 user_agent=user_agent
             )
-             return render(request, 'forgot_password.html', {
-                'error': "If this email exists, a reset link has been sent."
-            })
+            if cache.get(ip_key):
+                cache.incr(ip_key)
+            else:
+                cache.set(ip_key,1,Ip_timeout)
+            #return Response({"message": "Password reset email sent."})
+            messages.success(request, "Password reset email sent.")
+            return redirect('/login/')
         
+        except User.DoesNotExist:
+            #  RateLimitLog.objects.create(
+            #     email=email,
+            #     ip_address=ip,
+            #     user_agent=user_agent
+            # )
+             return render(request, 'forgot_password.html', {
+                'error': "User Not Exist."
+            })
         except Exception as e:
             print(f"Error sending email: {e}")
             return render(request, 'forgot_password.html', {
@@ -178,23 +239,30 @@ class ForgotPasswordView(APIView):
               
 class ResetPasswordView(APIView):
     def get(self, request, uidb64, token):
-        # You can add any validation here if needed
+        # You can add any validation here if needed.
         return render(request, 'reset_password.html', {'uidb64': uidb64, 'token': token})
 
     def post(self,request ,uidb64,token):
         try:
             uid = urlsafe_base64_decode(uidb64).decode()
             user = User.objects.get(pk=uid)
-
-            if default_token_generator.check_token(user,token):
+            if default_token_generator.check_token(user,token):          
                 new_password = request.data.get("password")
                 user.set_password(new_password)
                 user.save()
 
+                cache_key = f"throttle_email_{user.email}"
+                cache_key2 = f"throttleD_email_{user.email}"
+                print(user.email,cache_key,cache_key2 )
+                cache.delete(cache_key)
+                cache.delete(cache_key2)
+                cache.delete("failed_attempt") 
+
                 messages.success(request, "Your password has been changed successfully. Please log in.")
+                
                 return redirect('/login/')
 
-
+ 
                 #return Response({"message": "Password reset successful."})
             else:
                 return render(request, 'reset_password.html', {
