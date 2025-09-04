@@ -101,14 +101,19 @@
         </form>
 
         <div>
-            {% for message in messages %}
-              {% if message.tags == "success" %}
-               <div style="color: green;" class="success">{{ message }}</div>
-               {% endif %}
-              {% if message.tags == "error" %}
-              <div style="color: rgb(217, 50, 4);" class="error">{{ message }}</div>
-               {% endif %}
-             {% endfor %}
+            <div>
+            {% if error %}
+                <div id="errorMsg" style="color: red; font-size: 14px; margin-bottom: 10px;">
+                    {{ error }}
+                </div>
+            {% endif %}
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-success" style="color: rgb(0, 128, 0); font-size: 14px; margin-bottom: 10px;">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
            
         </div>
 

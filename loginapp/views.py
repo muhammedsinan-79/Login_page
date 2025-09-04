@@ -27,26 +27,28 @@ class HomePage(APIView):
         return render(request,'home.html')
         
 class SignupPage(APIView):
-    def get(self,request):
-        return render(request,'signup.html')
+    def get(self, request):
+        return render(request, 'signup.html')
     
-    def post(self,request):
-
-        print("incoming data:" , request.data)
+    def post(self, request):
+        print("incoming data:", request.data)
         email = request.data.get('email')
         password = request.data.get('password')
         name = request.data.get('full_name')
         confirm_password = request.data.get('confirm_password')
 
         if password != confirm_password:
-            #return Response({'error': 'Passwords do not match'}, status=400)
-            messages.error(request,"Passwords do not match")
-            return redirect('/signup/')
+            return render(request, 'signup.html', {
+                'error': "Passwords do not match",
+                'email': email,
+                'full_name': name
+            })
         
         if User.objects.filter(username=email).exists():
-            #return Response({'error':'User already exists'},status =400)
-            messages.success(request, "User already exists , Please log in.")
-            return redirect('/login/')
+            return render(request, 'signup.html', {
+                'error': "User already exists, please log in.",
+                'email': email
+            })
         
         user = User.objects.create_user(
             username=email,
@@ -55,9 +57,10 @@ class SignupPage(APIView):
             first_name=name
         )
         Token.objects.create(user=user)
+
         messages.success(request, "Your account has been created successfully. Please log in.")
-        return redirect('/login/')
-        #return render(request, 'login_success.html', {'email': email})
+        return redirect('/login/') 
+
      
 class LoginPage(APIView):
 
@@ -83,59 +86,60 @@ class LoginPage(APIView):
     def get(self,request): 
         return render(request , 'login.html')
     
-    def post(self , request):
-
+    def post(self, request):
         email = request.data.get('email')
         password = request.data.get('password')
         ip = request.META.get('REMOTE_ADDR')
         user_agent = request.META.get('HTTP_USER_AGENT')
 
         cache_key2 = f"throttleD_email_{email}"
+        cache_key3 = f"failed_attempt_{email}"
 
-        if cache.get(cache_key2,0):  #even try with correct password after 3 times fail , get  throttle
-            raise Throttled()   
-        
+        if cache.get(cache_key2, 0):  # even try with correct password after 3 times fail, get throttle
+            raise Throttled()
+
         try:
             user = User.objects.get(username=email)
         except User.DoesNotExist:
-            messages.error(request, "User not registered")
-            return redirect('/login/')
+            return render(request, "login.html", {"error": "User not registered"})
 
-        user = authenticate(username=email ,password=password)
+        user = authenticate(username=email, password=password)
         if user:
-            token,_=Token.objects.get_or_create(user=user)
+            token, _ = Token.objects.get_or_create(user=user)
 
             cache_key1 = f"throttle_email_{email}"
-            cache.delete(cache_key1)  #cache.set in throttle.py
-
-            cache.delete("failed_attempt") #delete remaining count.
+            cache.delete(cache_key1)  # cache.set in throttle.py
+            cache.delete(cache_key3)  # delete remaining count
 
             LoginCredentialLog.objects.create(
                 email=email,
-                ip_address = ip,
+                ip_address=ip,
                 user_agent=user_agent,
             )
-            return render(request, 'login_success.html', {'email': email, 'token': token.key})
+            return render(request, 'login_success.html', {'email': email, 'token': token.key, 'success': 'Login Successful'})
+
         else:
 
             throttle = LoginFailedAttemptLimiting()
-           
+
             if not throttle.allow_request(request, self):
-                cache.set(cache_key2, True , None)
+                cache.set(cache_key2, True, None)
                 raise Throttled(wait=throttle.wait())
             
-            remaining_attempt = cache.get("failed_attempt",3)
+            
+            remaining_attempt = cache.get(cache_key3, 3)
             remaining_attempt -= 1
             InvalidCredentialsLog.objects.create(
-                email=email,    
-                ip_address = ip,
+                email=email,
+                ip_address=ip,
                 user_agent=user_agent,
-            )  
-
-            cache.set("failed_attempt",remaining_attempt)
-            messages.error(request, f"Invalid Credentials , {remaining_attempt} Attempt Left") 
+            )
             
-            return redirect('/login/')
+            cache.set(cache_key3, remaining_attempt)
+
+            error_message = f"Invalid Credentials, {remaining_attempt} Attempt(s) Left"
+            return render(request, 'login.html', {"error": error_message})
+
 
 from rest_framework.authtoken.models import Token
 
@@ -166,7 +170,6 @@ class ForgotPasswordView(APIView):
             email = self.request.POST.get("email")
             ip = self.request.META.get('REMOTE_ADDR')
             user_agent = self.request.META.get('HTTP_USER_AGENT')
-            print(email,ip,user_agent)
 
             RateLimitLog.objects.create(
                 email=email,
@@ -175,20 +178,20 @@ class ForgotPasswordView(APIView):
                 is_throttled=True
             )
             return render(self.request, "forgot_password.html", {
-                "error": exc.detail  # this will now show your custom string
+                "error": exc.detail  # display throttling message
             }, status=429)
         return super().handle_exception(exc)
     
-    def get(self,request):
+    def get(self, request):
         return render(request, 'forgot_password.html')
     
-    def post(self,request):
+    def post(self, request):
         email = request.data.get('email')
         ip = request.META.get('REMOTE_ADDR')
         user_agent = request.META.get('HTTP_USER_AGENT') 
         
-        Ip_timeout = 600 #10min
-        ip_limit_count = 5
+        Ip_timeout = 600  # 10 min
+        ip_limit_count = 10
         ip_key = f"ip_rate_limit:{ip}"
 
         ip_count = cache.get(ip_key, 0)
@@ -197,84 +200,86 @@ class ForgotPasswordView(APIView):
                 email=email,
                 ip_address=ip,
                 user_agent=user_agent,
-                is_throttled= True
-                )
-            return render (request , 'forgot_password.html',{
-                'error':f"Too many requests from this IP address. Please wait 10 min."
+                is_throttled=True
+            )
+            return render(request, 'forgot_password.html', {
+                'error': f"Too many requests from this IP address. Please wait 10 min."
             })
+
         try:
             user = User.objects.get(email=email)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
-            reset_link = f"http://20.2.210.17/reset-password/{uid}/{token}/"
-            print(uid)
-            send_mail (
+            reset_link = f"http://20.2.209.183/reset-password/{uid}/{token}/"
+            
+            send_mail(
                 subject="Reset Your Password",
                 message=f"Click the link to reset your password: {reset_link}",
                 from_email="muhammedsinaan78@gmail.com",
                 recipient_list=[email],
                 fail_silently=False,
             )
+
             RateLimitLog.objects.create(
                 email=email,
                 ip_address=ip,
                 user_agent=user_agent
             )
+
             if cache.get(ip_key):
                 cache.incr(ip_key)
             else:
-                cache.set(ip_key,1,Ip_timeout)
-            #return Response({"message": "Password reset email sent."})
-            messages.success(request, "Password reset email sent.")
-            return redirect('/login/')
-        
+                cache.set(ip_key, 1, Ip_timeout)
+
+            # Render forgot_password page with success message
+            messages.success(request, "Password reset email sent successfully.")
+            return redirect('/login/')  
+    
         except User.DoesNotExist:
-            #  RateLimitLog.objects.create(
-            #     email=email,
-            #     ip_address=ip,
-            #     user_agent=user_agent
-            # )
-             return render(request, 'forgot_password.html', {
-                'error': "User Not Exist."
+            return render(request, 'forgot_password.html', {
+                'error': "User does not exist."
             })
         except Exception as e:
             print(f"Error sending email: {e}")
             return render(request, 'forgot_password.html', {
                 'error': "An error occurred. Please try again later."
             })
+
               
 class ResetPasswordView(APIView):
     def get(self, request, uidb64, token):
         # You can add any validation here if needed.
         return render(request, 'reset_password.html', {'uidb64': uidb64, 'token': token})
 
-    def post(self,request ,uidb64,token):
+    def post(self, request, uidb64, token):
         try:
             uid = urlsafe_base64_decode(uidb64).decode()
             user = User.objects.get(pk=uid)
-            if default_token_generator.check_token(user,token):          
+
+            if default_token_generator.check_token(user, token):          
                 new_password = request.data.get("password")
                 user.set_password(new_password)
                 user.save()
 
-                cache_key = f"throttle_email_{user.email}"
+                # Clear throttling caches
+                cache_key1 = f"throttle_email_{user.email}"
                 cache_key2 = f"throttleD_email_{user.email}"
-                print(user.email,cache_key,cache_key2 )
-                cache.delete(cache_key)
+                cache_key3 = f"failed_attempt_{user.email}"
+                cache.delete(cache_key1)
                 cache.delete(cache_key2)
-                cache.delete("failed_attempt") 
+                cache.delete(cache_key3) 
 
+           
                 messages.success(request, "Your password has been changed successfully. Please log in.")
-                
                 return redirect('/login/')
 
- 
-                #return Response({"message": "Password reset successful."})
             else:
                 return render(request, 'reset_password.html', {
                     'error': "Invalid or expired token.",
                     'uidb64': uidb64,
-                    'token': token,})
+                    'token': token,
+                })
+
         except Exception as e:
             print("Reset error:", e)
             return render(request, 'reset_password.html', {
@@ -282,6 +287,7 @@ class ResetPasswordView(APIView):
                 'token': token,
                 'error': "Something went wrong."
             })
+
         
 
 

@@ -1,7 +1,6 @@
 from rest_framework.throttling import BaseThrottle
 from django.core.cache import cache
 from rest_framework.exceptions import Throttled
-from .models import RateLimitLog
 import time
 
 class ProgressiveEmailThrottle(BaseThrottle):
@@ -55,12 +54,12 @@ class ProgressiveEmailThrottle(BaseThrottle):
 
             # return False #self.throttle_failure()
         
-        throttle_history["attempt"] +=1 
+        # Calculate wait_time BEFORE incrementing attempt
+        wait_time = base_time * (2 ** throttle_history["attempt"])
+        throttle_history["attempt"] += 1
         throttle_history["last_request_time"] = current_time
-
-        wait_time = base_time * (2**((throttle_history["attempt"])-1))  # logic  
         throttle_history["next_allowed_time"] = current_time + wait_time
-
+        
         cache.set(self.key , throttle_history, timeout= rest_time)
  
         return True  #super().allow_request(request, view)
@@ -99,7 +98,7 @@ class LoginFailedAttemptLimiting(BaseThrottle):
         # current_time = time.time()
 
         if  min_attempt > throttle_history["attempt"] +1:
-            remaining_attempt = min_attempt - throttle_history["attempt"]
+            remaining_attempt = min_attempt - (throttle_history["attempt"]+1)
             throttle_history["attempt"] +=1 
             print("remain " , remaining_attempt)
             cache.set(self.key , throttle_history, None)
