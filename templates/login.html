@@ -120,10 +120,10 @@
                 </div>
             {% endif %}
 
-            {% if success %}
-                <div id="successMsg" style="color: green; font-size: 14px; margin-bottom: 10px;">
-                    {{ success }}
-                </div>
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-success" style="color: rgb(32, 216, 22); font-size: 14px; margin-bottom: 10px;">{{ message }}</div>
+                {% endfor %}
             {% endif %}
         </div>
 

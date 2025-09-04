@@ -58,9 +58,8 @@ class SignupPage(APIView):
         )
         Token.objects.create(user=user)
 
-        return render(request, 'signup.html', {
-            'success': "Your account has been created successfully. Please log in."
-        })
+        messages.success(request, "Your account has been created successfully. Please log in.")
+        return redirect('/login/') 
 
      
 class LoginPage(APIView):
@@ -94,6 +93,7 @@ class LoginPage(APIView):
         user_agent = request.META.get('HTTP_USER_AGENT')
 
         cache_key2 = f"throttleD_email_{email}"
+        cache_key3 = f"failed_attempt_{email}"
 
         if cache.get(cache_key2, 0):  # even try with correct password after 3 times fail, get throttle
             raise Throttled()
@@ -109,7 +109,7 @@ class LoginPage(APIView):
 
             cache_key1 = f"throttle_email_{email}"
             cache.delete(cache_key1)  # cache.set in throttle.py
-            cache.delete("failed_attempt")  # delete remaining count
+            cache.delete(cache_key3)  # delete remaining count
 
             LoginCredentialLog.objects.create(
                 email=email,
@@ -119,20 +119,23 @@ class LoginPage(APIView):
             return render(request, 'login_success.html', {'email': email, 'token': token.key, 'success': 'Login Successful'})
 
         else:
+
             throttle = LoginFailedAttemptLimiting()
 
             if not throttle.allow_request(request, self):
                 cache.set(cache_key2, True, None)
                 raise Throttled(wait=throttle.wait())
-
-            remaining_attempt = cache.get("failed_attempt", 3)
+            
+            
+            remaining_attempt = cache.get(cache_key3, 3)
             remaining_attempt -= 1
             InvalidCredentialsLog.objects.create(
                 email=email,
                 ip_address=ip,
                 user_agent=user_agent,
             )
-            cache.set("failed_attempt", remaining_attempt)
+            
+            cache.set(cache_key3, remaining_attempt)
 
             error_message = f"Invalid Credentials, {remaining_attempt} Attempt(s) Left"
             return render(request, 'login.html', {"error": error_message})
@@ -188,7 +191,7 @@ class ForgotPasswordView(APIView):
         user_agent = request.META.get('HTTP_USER_AGENT') 
         
         Ip_timeout = 600  # 10 min
-        ip_limit_count = 5
+        ip_limit_count = 10
         ip_key = f"ip_rate_limit:{ip}"
 
         ip_count = cache.get(ip_key, 0)
@@ -229,10 +232,9 @@ class ForgotPasswordView(APIView):
                 cache.set(ip_key, 1, Ip_timeout)
 
             # Render forgot_password page with success message
-            return render(request, 'login.html', {
-                'success': "Password reset email sent successfully."
-            })
-        
+            messages.success(request, "Password reset email sent successfully.")
+            return redirect('/login/')  
+    
         except User.DoesNotExist:
             return render(request, 'forgot_password.html', {
                 'error': "User does not exist."
@@ -260,16 +262,16 @@ class ResetPasswordView(APIView):
                 user.save()
 
                 # Clear throttling caches
-                cache_key = f"throttle_email_{user.email}"
+                cache_key1 = f"throttle_email_{user.email}"
                 cache_key2 = f"throttleD_email_{user.email}"
-                cache.delete(cache_key)
+                cache_key3 = f"failed_attempt_{user.email}"
+                cache.delete(cache_key1)
                 cache.delete(cache_key2)
-                cache.delete("failed_attempt") 
+                cache.delete(cache_key3) 
 
-                # Render the template with a success message
-                return render(request, 'login.html', {
-                    'success': "Your password has been changed successfully. Please log in."
-                })
+           
+                messages.success(request, "Your password has been changed successfully. Please log in.")
+                return redirect('/login/')
 
             else:
                 return render(request, 'reset_password.html', {
