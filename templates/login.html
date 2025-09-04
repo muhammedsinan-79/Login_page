@@ -109,32 +109,28 @@
         </form>
 
         <div class="auth-links">
-            
-             <a href="/signup/">Create Account</a>
-             <a href="/forgot-password/">Forgot Password?</a>
+            <a href="/signup/">Create Account</a>
+            <a href="/forgot-password/">Forgot Password?</a>
         </div>
+
         <div>
-            {% for message in messages %}
-              {% if message.tags == "success" %}
-               <div style="color: green;" class="success">{{ message }}</div>
-               {% endif %}
-                {% if message.tags == "error" %}
-                <div style="color: rgb(217, 50, 4);" class="error">{{ message }}</div>
-                {% endif %}
-             {% endfor %}
+            {% if error %}
+                <div id="errorMsg" style="color: red; font-size: 14px; margin-bottom: 10px;">
+                    {{ error }}
+                </div>
+            {% endif %}
 
-             {% if error %}
-            <div id="errorMsg" style="color: red; font-size: 14px; margin-bottom: 10px;">
-               {{ error }} <span id="countdown" style="font-weight: bold;"></span>
-            </div>
-             {% endif %} 
-           
+            {% if success %}
+                <div id="successMsg" style="color: green; font-size: 14px; margin-bottom: 10px;">
+                    {{ success }}
+                </div>
+            {% endif %}
         </div>
-
 
         <div class="footer">
             &copy; 2025 Casualio
         </div>
     </div>
 </body>
+
 </html>
