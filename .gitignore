@@ -1,0 +1,18 @@
+# Ignore environment file
+.env
+
+# Ignore SQLite database
+*.sqlite3
+
+# Ignore socket files
+*.sock
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore staticfiles (collected)
+staticfiles/
+
+# Ignore virtual environment folder (if any)
+venv/
