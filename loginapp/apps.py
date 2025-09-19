@@ -5,7 +5,7 @@ from django.core.cache import cache
 logger = logging.getLogger(__name__)
 
 
-class LoginAppConfig(AppConfig):
+class LoginappConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'loginapp'
 
