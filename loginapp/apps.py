@@ -5,10 +5,10 @@ from django.core.cache import cache
 logger = logging.getLogger(__name__)
 
 
-class LoginappConfig(AppConfig):
+class LoginAppConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'loginapp'
-    
+
 
     def ready(self):
         keys = cache.keys("throttle_email_*")
