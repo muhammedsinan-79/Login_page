@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'loginapp',
     'rest_framework.authtoken',
+    'loginapp.apps.LoginAppConfig',
 ]
 
 MIDDLEWARE = [
