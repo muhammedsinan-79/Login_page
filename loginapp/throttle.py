@@ -4,6 +4,7 @@ from rest_framework.exceptions import Throttled
 import time , logging
 
 logger = logging.getLogger(__name__)
+from .logging_config import logger
 
 
 class ProgressiveEmailThrottle(BaseThrottle):
