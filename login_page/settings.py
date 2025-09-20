@@ -44,6 +44,9 @@ REST_FRAMEWORK = {
          
     }
 }
+EMAIL_BASE_WAIT_TIME = 15  # Base wait time in seconds (1 minute)
+EMAIL_MAX_ATTEMPTS = 4    # Maximum attempts before blocking
+EMAIL_RESET_PERIOD = 3600  # Reset period in seconds (1 hour)
 
 
 # Application definition
