@@ -16,3 +16,8 @@ staticfiles/
 
 # Ignore virtual environment folder (if any)
 venv/
+__pycache__/
+*.py[cod]
+
+.venv/
+db.sqlite3

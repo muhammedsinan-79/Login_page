@@ -88,14 +88,16 @@ from .logging_config import logger
     
 #     def wait(self):
 #         return getattr(self, "wait_time", 60)
+from django.conf import settings
 
-class ExponentialEmailThrottle(BaseThrottle):
+
+class ProgressiveEmailThrottle(BaseThrottle):
    
-    
     def __init__(self):
         self.base_wait_time = getattr(settings, 'EMAIL_BASE_WAIT_TIME', 60)  # 1 minute
         self.max_attempts = getattr(settings, 'EMAIL_MAX_ATTEMPTS', 8)  # Limit due to exponential growth
         self.reset_period = getattr(settings, 'EMAIL_RESET_PERIOD', 3600)  # 1 hour
+        self._current_wait_time = None
     
     def allow_request(self, request, view):
         ident = self.get_ident(request)
@@ -119,10 +121,13 @@ class ExponentialEmailThrottle(BaseThrottle):
         
         # Check max attempts
         if throttle_data['attempts'] >= self.max_attempts:
+            self._current_wait_time = self.reset_period - (current_time - throttle_data['last_request_time'])
+            self._current_wait_time = max(0, self._current_wait_time)
             return False
         
         # Check if enough time has passed
         if current_time < throttle_data['next_allowed_time']:
+            self._current_wait_time = throttle_data['next_allowed_time'] - current_time
             return False
         
         # Update throttle data
@@ -135,19 +140,8 @@ class ExponentialEmailThrottle(BaseThrottle):
         
         cache.set(cache_key, throttle_data, timeout=self.reset_period)
         
+        self._current_wait_time = None
         return True
-    
-    def wait(self):
-        ident = self.get_ident(self.request)
-        cache_key = f"email_throttle_exp_{ident}"
-        throttle_data = cache.get(cache_key)
-        
-        if throttle_data:
-            current_time = time.time()
-            wait_time = throttle_data['next_allowed_time'] - current_time
-            return max(0, wait_time)
-        
-        return 0
 
 class LoginFailedAttemptLimiting(BaseThrottle):
 
